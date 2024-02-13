@@ -73,7 +73,8 @@ def main(
     ),
 ) -> None:
     seed_everything(123)
-    shutil.rmtree(root_output_path)
+    if root_output_path.exists():
+        shutil.rmtree(root_output_path)
 
     for sample_path in raw_samples_path.iterdir():
         for dataset in sample_path.iterdir():
