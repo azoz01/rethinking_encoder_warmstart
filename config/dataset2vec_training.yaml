@@ -1,0 +1,31 @@
+# Meta
+name: "dataset2vec"
+
+# Data
+train_data_path: "data/openml/encoder_training_data/train"
+train_batch_size: 32
+train_n_batches: 50
+
+val_data_path: "data/openml/encoder_training_data/val"
+val_batch_size: 512
+
+# Model
+f_dense_hidden_size: 32
+f_res_hidden_size: 32
+f_res_n_hidden: 3
+f_dense_out_hidden_size: 32
+f_block_repetitions: 7
+g_layers_sizes: [32, 16, 8]
+h_dense_hidden_size: 32
+h_res_hidden_size: 32
+h_res_n_hidden: 3
+h_dense_out_hidden_size: 16
+h_block_repetitions: 3
+
+# Trainer
+gamma: 1
+learning_rate: 0.001
+weight_decay: 0.0001
+max_epochs: 2
+check_val_every_n_epoch: 1
+early_stopping_patience: 100
