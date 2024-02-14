@@ -24,6 +24,7 @@ def main(
     ),
     checkpoint_path: Annotated[Path, typer.Option(..., help="Path to checkpoint.")] = None,
 ):
+    pl.seed_everything(123)
     logger.info("Loading config")
     with open(config_path) as f:
         config = yaml.load(f, Loader=yaml.CLoader)
