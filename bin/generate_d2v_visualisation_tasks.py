@@ -6,7 +6,6 @@ import typer
 from loguru import logger
 from pathlib import Path
 from pytorch_lightning import seed_everything
-from sklearn.preprocessing import OneHotEncoder
 from typing_extensions import Annotated
 
 
@@ -45,19 +44,14 @@ def sample_data(X, y):
 def generate_tasks(path, root_output_path: Path):
     df = pd.read_csv(path)
     X, y = df.iloc[:, :-1], df.iloc[:, [-1]]
-    ohe = OneHotEncoder(sparse_output=False)
-    ohe.set_output(transform="pandas")
-    if y.nunique().values > 2:
-        y = ohe.fit_transform(y)
-
     output_path = root_output_path / "/".join(str(path).split("/")[4:])
     output_path = output_path.with_suffix("")
     output_path.mkdir(parents=True, exist_ok=True)
     for i in range(100):
         (output_path / str(i)).mkdir()
         X_sample, y_sample = sample_data(X, y)
-        X_sample.to_csv(output_path / str(i) / "X.csv", index=False)
-        y_sample.to_csv(output_path / str(i) / "y.csv", index=False)
+        X_sample["label"] = y_sample
+        X_sample.to_csv(output_path / str(i) / "test.csv", index=False)
 
 
 app = typer.Typer()
