@@ -14,4 +14,5 @@ cp `find results/dataset2vec -name epoch\*.ckpt -print` models/d2v.ckpt
 
 python bin/generate_plots_uci.py
 python bin/generate_plots_mimic.py
-python bin/generate_hpo_random_base.py
+python bin/generate_hpo_random_base_mimic.py
+python bin/generate_hpo_random_base.py --input-data-path=data/uci/splitted --output-results-path=results/logistic_hpo_uci

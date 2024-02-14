@@ -21,10 +21,7 @@ from engine.random_hpo.searchers.hpo_searchers import RandomSearch
 app = typer.Typer()
 
 
-@app.command(
-    help="""create mini holdout tasks for regular models (e.g. linear regression).
-    Each task is a directory with two files: train and test"""
-)
+@app.command(help="Generate hyperparameter base.")
 def main(
     input_data_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
         "data/mimic/mini_holdout"
@@ -33,21 +30,22 @@ def main(
         int,
         typer.Option(
             ...,
-            "Number of tasks per dataset.",
+            help="Number of tasks per dataset.",
         ),
-    ] = 10,
+    ] = 167,
     number_of_random_combinations: Annotated[
         int,
         typer.Option(
             ...,
-            "Number of combinations in random search.",
+            help="Number of combinations in random search.",
         ),
     ] = 200,
     output_results_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
-        "results/logistic_hpo"
+        "results/logistic_hpo_mimic"
     ),
 ) -> None:
     seed_everything(123)
+    print(input_data_path)
     if output_results_path.exists():
         shutil.rmtree(output_results_path)
     output_results_path.mkdir()
@@ -94,4 +92,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    app()
