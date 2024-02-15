@@ -2,8 +2,8 @@
 
 export PYTHONPATH=`pwd`
 
-# python bin/preprocess_mimic.py
-# python bin/generate_mini_holdout.py
+python bin/preprocess_mimic.py
+python bin/generate_mini_holdout.py
 
 python bin/generate_d2v_visualisation_tasks.py
 python bin/train_liltab.py
@@ -14,5 +14,9 @@ cp `find results/dataset2vec -name epoch\*.ckpt -print` models/d2v.ckpt
 
 python bin/generate_plots_uci.py
 python bin/generate_plots_mimic.py
+
+python bin/generate_hpo_random_base_uci.py
 python bin/generate_hpo_random_base_mimic.py
-python bin/generate_hpo_random_base.py --input-data-path=data/uci/splitted --output-results-path=results/logistic_hpo_uci
+
+python bin/generate_hp_base_index_uci.py
+python bin/generate_hp_base_index_mimic.py
