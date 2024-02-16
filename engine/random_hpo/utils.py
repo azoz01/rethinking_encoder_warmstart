@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
 
 from .searchers.search_grid import ConditionalGrid, CubeGrid
 
@@ -49,6 +50,28 @@ def get_logistic_regression_grid(init_seed: int = None) -> ConditionalGrid:
 
 def get_predefined_logistic_regression() -> LogisticRegression:
     model = LogisticRegression(random_state=123, max_iter=500)
+    return model
+
+
+def get_xgboost_grid() -> ConditionalGrid:
+    base_grid = CubeGrid()
+    base_grid.add("n_estimators", values=[1, 1000], space="int")
+    base_grid.add("learning_rate", values=[0.031, 1], space="real", distribution="loguniform")
+    base_grid.add("booster", values=["gblinear", "gbtree"], space="cat")
+    base_grid.add("subsample", values=[0.5, 1], space="real")
+    base_grid.add("max_depth", values=[6, 15], space="int")
+    base_grid.add("min_child_weight", values=[1, 8], space="real", distribution="loguniform")
+    base_grid.add("colsample_bytree", values=[0.2, 1], space="real")
+    base_grid.add("colsample_bylevel", values=[0.2, 1], space="real")
+
+    cond_grid = ConditionalGrid()
+    cond_grid.add_cube(base_grid)
+
+    return cond_grid
+
+
+def get_predefined_xgboost_classifier() -> XGBClassifier:
+    model = XGBClassifier(random_state=123)
     return model
 
 

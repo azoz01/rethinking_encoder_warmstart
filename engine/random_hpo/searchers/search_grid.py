@@ -88,8 +88,7 @@ class CubeGrid(RandomGrid):
         """
         random_coordinates = [rng() for rng in self.rngs]
         dict_coordinates = {
-            name: coordinates
-            for name, coordinates in zip(self.names, random_coordinates)
+            name: coordinates for name, coordinates in zip(self.names, random_coordinates)
         }
         return dict_coordinates
 
@@ -122,9 +121,7 @@ class ConditionalGrid(RandomGrid):
         self.cubes: List[CubeGrid] = []
         self.conditions: List[Callable[..., bool]] = []
 
-    def add_cube(
-        self, cube: CubeGrid, condition: Callable[..., bool] = lambda _: True
-    ) -> None:
+    def add_cube(self, cube: CubeGrid, condition: Callable[..., bool] = lambda _: True) -> None:
         """Add cube to sequence. Random values are generated in sequence
         of adding them, starting from first.
 

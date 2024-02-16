@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import shutil
 import typer
 
 from liltab.train.utils import LightningWrapper as LiltabWrapper
@@ -79,6 +78,7 @@ def main(
     df = concatenated.drop(columns=["representation"])
     df["x"] = X[:, 0]
     df["y"] = X[:, 1]
+    df.to_csv(output_plots_path / "liltab_mimic.csv", index=False)
 
     logger.info("Generating liltab scatter plot.")
     rcParams["figure.figsize"] = (16, 9)
@@ -113,6 +113,7 @@ def main(
     df = concatenated.drop(columns=["representation"])
     df["x"] = X[:, 0]
     df["y"] = X[:, 1]
+    df.to_csv(output_plots_path / "d2v_mimic.csv", index=False)
 
     logger.info("Generating d2v scatter plot.")
     rcParams["figure.figsize"] = (16, 9)

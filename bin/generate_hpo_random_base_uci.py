@@ -13,6 +13,8 @@ from engine.random_hpo.utils import (
     get_datasets,
     get_logistic_regression_grid,
     get_predefined_logistic_regression,
+    get_predefined_xgboost_classifier,
+    get_xgboost_grid,
     put_results,
 )
 from engine.random_hpo.searchers.hpo_searchers import RandomSearch
@@ -33,7 +35,7 @@ def main(
         ),
     ] = 100,
     output_results_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
-        "results/logistic_hpo_uci"
+        "results/hpo_uci"
     ),
 ) -> None:
     seed_everything(123)
@@ -53,10 +55,6 @@ def main(
             if "test" in str(dir_name):
                 logger.warning(f"skipping {dir_name}")
                 continue
-            grid = get_logistic_regression_grid()
-            model = get_predefined_logistic_regression()
-            searcher = RandomSearch(model, grid)
-
             train_X, train_y, test_X, test_y = (
                 data_tuple[0].iloc[:, :-1],
                 data_tuple[0].iloc[:, -1],
@@ -64,26 +62,53 @@ def main(
                 data_tuple[1].iloc[:, -1],
             )
 
+            # Logistic regression
+            logistic_grid = get_logistic_regression_grid()
+            logistic_model = get_predefined_logistic_regression()
+            logistic_searcher = RandomSearch(logistic_model, logistic_grid)
+
             logger.info(f"Start training {dir_name}")
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                searcher.search_holdout(
+                logistic_searcher.search_holdout(
                     train_X, train_y, test_X, test_y, metric, n_iter=number_of_random_combinations
                 )
 
             put_results(
                 output_results_path / "logistic_scores_base.pkl",
                 dir_name,
-                str(model.__class__),
-                searcher.search_results["score"],
+                str(logistic_model.__class__),
+                logistic_searcher.search_results["score"],
             )
+
+            # XGboost
+            xgboost_grid = get_xgboost_grid()
+            xgboost_model = get_predefined_xgboost_classifier()
+            xgboost_searcher = RandomSearch(xgboost_model, xgboost_grid)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                xgboost_searcher.search_holdout(
+                    train_X, train_y, test_X, test_y, metric, n_iter=number_of_random_combinations
+                )
+
+            put_results(
+                output_results_path / "xgboost_scores_base.pkl",
+                dir_name,
+                str(xgboost_model.__class__),
+                xgboost_searcher.search_results["score"],
+            )
+
         except Exception as e:
             logger.error(e)
             logger.error(f"{dir_name} FAILED")
 
     with open(output_results_path / "logistic_parameters_base.pkl", "wb") as f:
-        pkl.dump(searcher.search_results["hpo"], f)
+        pkl.dump(logistic_searcher.search_results["hpo"], f)
+
+    with open(output_results_path / "xgboost_parameters_base.pkl", "wb") as f:
+        pkl.dump(xgboost_searcher.search_results["hpo"], f)
 
 
 if __name__ == "__main__":

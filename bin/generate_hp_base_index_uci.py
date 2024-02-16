@@ -68,7 +68,7 @@ def main(
     best_flags = list(
         map(
             lambda x: (
-                (np.array(x[1]) == np.min(x[1])) & ((np.array(x[1]) == np.min(x[1])).sum() == 1)
+                (np.array(x[1]) == np.max(x[1])) & ((np.array(x[1]) == np.max(x[1])).sum() == 1)
             ).astype(int),
             items,
         )
