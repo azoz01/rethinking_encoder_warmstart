@@ -40,10 +40,10 @@ app = typer.Typer()
 def main(
     ho_path: Annotated[
         Path, typer.Option(..., help="Path to hyperparameter configurations")
-    ] = Path("results/logistic_hpo_mimic/logistic_parameters_base.pkl"),
+    ] = Path("results/hpo_mimic/logistic_parameters_base.pkl"),
     scores_path: Annotated[
         Path, typer.Option(..., help="Path to hyperparameter scores across tasks")
-    ] = Path("results/logistic_hpo_mimic/logistic_scores_base.pkl"),
+    ] = Path("results/hpo_mimic/logistic_scores_base.pkl"),
     liltab_encoder_path: Annotated[
         Path, typer.Option(..., help="Path to liltab encoder path")
     ] = Path("models/liltab.ckpt"),
@@ -95,8 +95,7 @@ def main(
     ranked_combinations = dict(zip(final_ranks, hpo))
 
     rows = [
-        pd.DataFrame({"rank": [idx], "logistic_best_hpo": [hpo]})
-        for idx, hpo in ranked_combinations.items()
+        pd.DataFrame({"rank": [idx], "best_hpo": [hpo]}) for idx, hpo in ranked_combinations.items()
     ]
     output_ranks = pd.concat(rows).reset_index(drop=True).sort_values("rank")
     output_ranks.to_parquet(output_results_path / "ranks.parquet")
@@ -120,8 +119,8 @@ def main(
                 "task_path": [str(task_path)],
                 "liltab_encoding": [liltab_encoding],
                 "d2v_encoding": [d2v_encoding],
-                "logistic_best_hpo": [best_hpo],
-                "logistic_best_score": [best_score],
+                "best_hpo": [best_hpo],
+                "best_score": [best_score],
             }
         )
 

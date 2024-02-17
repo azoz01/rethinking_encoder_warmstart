@@ -291,7 +291,7 @@ def main(
             else:
                 raise ValueError(f"Invalid encoder: {task_encoder}")
         for _, row in warmstart.iterrows():
-            warmstart_trial = row["logistic_best_hpo"]
+            warmstart_trial = row["best_hpo"]
             solver_penalty = (warmstart_trial["solver"], warmstart_trial["penalty"])
             solver_penalty_idx = logistic_solver_penalty_pairs.index(solver_penalty)
             warmstart_trial = deepcopy(warmstart_trial)

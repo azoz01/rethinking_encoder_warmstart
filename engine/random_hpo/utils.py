@@ -66,6 +66,7 @@ def get_xgboost_grid() -> ConditionalGrid:
 
     cond_grid = ConditionalGrid()
     cond_grid.add_cube(base_grid)
+    cond_grid.reset_seed(123)
 
     return cond_grid
 

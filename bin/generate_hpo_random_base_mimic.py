@@ -14,8 +14,6 @@ from engine.random_hpo.utils import (
     get_datasets,
     get_logistic_regression_grid,
     get_predefined_logistic_regression,
-    get_predefined_xgboost_classifier,
-    get_xgboost_grid,
     put_results,
 )
 from engine.random_hpo.searchers.hpo_searchers import RandomSearch
