@@ -44,7 +44,7 @@ def sample_data(X, y):
 def generate_tasks(path, root_output_path: Path):
     df = pd.read_csv(path)
     X, y = df.iloc[:, :-1], df.iloc[:, [-1]]
-    output_path = root_output_path / "/".join(str(path).split("/")[4:])
+    output_path = root_output_path / path.stem
     output_path = output_path.with_suffix("")
     output_path.mkdir(parents=True, exist_ok=True)
     for i in range(100):
@@ -59,9 +59,9 @@ app = typer.Typer()
 
 @app.command(help="Generate subsets of UCI set which will be used for visualization")
 def main(
-    raw_samples_path: Annotated[
-        Path, typer.Option(..., help="Path to source data with train and test splits")
-    ] = Path("data/uci/raw"),
+    data_path: Annotated[Path, typer.Option(..., help="Path to input data.")] = Path(
+        "data/uci/raw"
+    ),
     root_output_path: Annotated[Path, typer.Option(..., help="Path to output tasks")] = Path(
         "data/uci/visualization"
     ),
@@ -70,10 +70,9 @@ def main(
     if root_output_path.exists():
         shutil.rmtree(root_output_path)
 
-    for sample_path in raw_samples_path.iterdir():
-        for dataset in sample_path.iterdir():
-            logger.info(dataset)
-            generate_tasks(dataset, root_output_path)
+    for dataset_path in data_path.iterdir():
+        logger.info(dataset_path)
+        generate_tasks(dataset_path, root_output_path)
 
 
 if __name__ == "__main__":

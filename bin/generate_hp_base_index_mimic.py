@@ -1,10 +1,11 @@
+import json
 import numpy as np
 import pandas as pd
 import shutil
 import pickle as pkl
 import typer
 
-from dataset2vec.train import LightningWrapper as D2vWrapper
+from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.train.utils import LightningWrapper as LiltabWrapper
 from loguru import logger
 from itertools import starmap
@@ -15,75 +16,14 @@ from typing_extensions import Annotated
 from torch import Tensor, no_grad
 from tqdm import tqdm
 
-TRAINING_DATASETS = [
-    "alcohol_diagnosed-10",
-    "hypotension_diagnosed-10",
-    "diabetes_diagnosed-10",
-    "anemia_diagnosed-10",
-    "purpura_diagnosed-10",
-    "respiratory_diagnosed-10",
-    "atrial_diagnosed-10",
-    "hypertensive_diagnosed-10",
-    "overweight_diagnosed-10",
-    "lipoid_diagnosed-10",
-]
 
-
-def task_in_training_datasets(name):
-    return any([dataset in name for dataset in TRAINING_DATASETS])
-
-
-app = typer.Typer()
-
-
-@app.command(help="Generate hyperparameter base.")
-def main(
-    ho_path: Annotated[
-        Path, typer.Option(..., help="Path to hyperparameter configurations")
-    ] = Path("results/hpo_mimic/logistic_parameters_base.pkl"),
-    scores_path: Annotated[
-        Path, typer.Option(..., help="Path to hyperparameter scores across tasks")
-    ] = Path("results/hpo_mimic/logistic_scores_base.pkl"),
-    liltab_encoder_path: Annotated[
-        Path, typer.Option(..., help="Path to liltab encoder path")
-    ] = Path("models/liltab.ckpt"),
-    d2v_encoder_path: Annotated[Path, typer.Option(..., help="Path to d2v encoder path")] = Path(
-        "models/d2v.ckpt"
-    ),
-    output_results_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
-        "results/hyperparameters_index_mimic"
-    ),
-) -> None:
-    seed_everything(123)
-    if output_results_path.exists():
-        shutil.rmtree(output_results_path)
-    output_results_path.mkdir()
-
-    logger.info("Loading encoders")
-    liltab_encoder = LiltabWrapper.load_from_checkpoint(liltab_encoder_path).model
-    d2v_encoder = D2vWrapper.load_from_checkpoint(d2v_encoder_path).encoder
-
-    encoders = {
-        "liltab": lambda X, y: liltab_encoder.encode_support_set(X, y),
-        "d2v": d2v_encoder,
-    }
-
-    logger.info("Loading hyperparameters with scores")
-    with open(ho_path, "rb") as f:
-        hpo = pkl.load(f)
-
-    with open(scores_path, "rb") as f:
-        scores = pkl.load(f)
-    scores = scores["<class 'sklearn.linear_model._logistic.LogisticRegression'>"]
-
+def process_hpo_base(hpo, scores, encoders, tasks_to_index):
     logger.info("Generating ranks")
     items = list(scores.items())
-    items = list(filter(lambda item: task_in_training_datasets(item[0]), items))
+    items = list(filter(lambda item: item[0].split("/")[-2] in tasks_to_index, items))
     best_flags = list(
         map(
-            lambda x: (
-                (np.array(x[1]) == np.max(x[1])) & ((np.array(x[1]) == np.max(x[1])).sum() == 1)
-            ).astype(int),
+            lambda x: ((np.array(x[1]) == np.max(x[1]))).astype(int),
             items,
         )
     )
@@ -98,7 +38,6 @@ def main(
         pd.DataFrame({"rank": [idx], "best_hpo": [hpo]}) for idx, hpo in ranked_combinations.items()
     ]
     output_ranks = pd.concat(rows).reset_index(drop=True).sort_values("rank")
-    output_ranks.to_parquet(output_results_path / "ranks.parquet")
 
     logger.info("Indexing optimization results using encoders")
 
@@ -127,7 +66,68 @@ def main(
     records = list(starmap(generate_record, tqdm(items)))
     output_index = pd.concat(records).reset_index(drop=True)
 
-    output_index.to_parquet(output_results_path / "index.parquet", index=False)
+    return output_index, output_ranks
+
+
+app = typer.Typer()
+
+
+@app.command(help="Generate hyperparameter base.")
+def main(
+    hpo_base_path: Annotated[
+        Path, typer.Option(..., help="Path to hyperparameter optimisation results")
+    ] = Path("results/hpo_mimic"),
+    liltab_encoder_path: Annotated[
+        Path, typer.Option(..., help="Path to liltab encoder path")
+    ] = Path("models/liltab.ckpt"),
+    d2v_encoder_path: Annotated[Path, typer.Option(..., help="Path to d2v encoder path")] = Path(
+        "models/d2v.ckpt"
+    ),
+    output_results_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
+        "results/hyperparameters_index_mimic"
+    ),
+) -> None:
+    seed_everything(123)
+    if output_results_path.exists():
+        shutil.rmtree(output_results_path)
+    output_results_path.mkdir()
+
+    logger.info("Loading encoders")
+    liltab_encoder = LiltabWrapper.load_from_checkpoint(liltab_encoder_path).model
+    d2v_encoder = D2vWrapper.load_from_checkpoint(d2v_encoder_path).encoder
+
+    encoders = {
+        "liltab": lambda X, y: liltab_encoder.encode_support_set(X, y),
+        "d2v": d2v_encoder,
+    }
+
+    with open("config/mimic_splits.json") as f:
+        folds = json.load(f)
+    for i, fold in enumerate(folds):
+        logger.info(f"Processing fold {i}")
+        logger.info("Processing logistic regression")
+        with open(hpo_base_path / "logistic_parameters_base.pkl", "rb") as f:
+            hpo = pkl.load(f)
+
+        with open(hpo_base_path / "logistic_scores_base.pkl", "rb") as f:
+            scores = pkl.load(f)["<class 'sklearn.linear_model._logistic.LogisticRegression'>"]
+
+        output_index_logistic, output_ranks_logistic = process_hpo_base(
+            hpo, scores, encoders, fold["train_tasks"]
+        )
+        output_index_logistic = output_index_logistic.rename(
+            columns={"best_hpo": "best_hpo_logistic", "best_score": "best_score_logistic"}
+        )
+        output_ranks_logistic = output_ranks_logistic.rename(
+            columns={"best_hpo": "best_hpo_logistic"}
+        )
+
+        output_index_logistic.to_parquet(
+            output_results_path / f"index_fold_{i}.parquet", index=False
+        )
+        output_ranks_logistic.to_parquet(
+            output_results_path / f"ranks_fold_{i}.parquet", index=False
+        )
 
 
 if __name__ == "__main__":

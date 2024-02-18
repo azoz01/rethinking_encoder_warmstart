@@ -56,11 +56,11 @@ def get_predefined_logistic_regression() -> LogisticRegression:
 def get_xgboost_grid() -> ConditionalGrid:
     base_grid = CubeGrid()
     base_grid.add("n_estimators", values=[1, 1000], space="int")
-    base_grid.add("learning_rate", values=[0.031, 1], space="real", distribution="loguniform")
+    base_grid.add("learning_rate", values=[0, 1], space="real", distribution="uniform")
     base_grid.add("booster", values=["gblinear", "gbtree"], space="cat")
     base_grid.add("subsample", values=[0.5, 1], space="real")
     base_grid.add("max_depth", values=[6, 15], space="int")
-    base_grid.add("min_child_weight", values=[1, 8], space="real", distribution="loguniform")
+    base_grid.add("min_child_weight", values=[2, 256], space="real", distribution="uniform")
     base_grid.add("colsample_bytree", values=[0.2, 1], space="real")
     base_grid.add("colsample_bylevel", values=[0.2, 1], space="real")
 
@@ -72,7 +72,7 @@ def get_xgboost_grid() -> ConditionalGrid:
 
 
 def get_predefined_xgboost_classifier() -> XGBClassifier:
-    model = XGBClassifier(random_state=123)
+    model = XGBClassifier(random_state=123, n_jobs=-1)
     return model
 
 
@@ -83,10 +83,9 @@ def get_datasets(path: Path) -> List[Tuple[pd.DataFrame, pd.DataFrame]]:
     data_tuples = {}
 
     for dataset_path in directories:
-        for path in dataset_path.iterdir():
-            df_train = pd.read_csv(path / "train.csv")
-            df_test = pd.read_csv(path / "test.csv")
-            data_tuples[str(path)] = (df_train, df_test)
+        df_train = pd.read_csv(dataset_path / "train.csv")
+        df_test = pd.read_csv(dataset_path / "test.csv")
+        data_tuples[str(dataset_path)] = (df_train, df_test)
 
     return data_tuples
 

@@ -5,7 +5,7 @@ import seaborn as sns
 import typer
 
 from liltab.train.utils import LightningWrapper as LiltabWrapper
-from dataset2vec.train import LightningWrapper as D2vWrapper
+from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.data.datasets import PandasDataset
 from loguru import logger
 from matplotlib import rcParams

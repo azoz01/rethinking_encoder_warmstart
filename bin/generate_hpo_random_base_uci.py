@@ -8,6 +8,7 @@ from pathlib import Path
 from pytorch_lightning import seed_everything
 from sklearn.metrics import roc_auc_score as metric
 from typing_extensions import Annotated
+from tqdm import tqdm
 
 from engine.random_hpo.utils import (
     get_datasets,
@@ -46,15 +47,12 @@ def main(
     dataloaders = get_datasets(input_data_path)
 
     logger.info("Start searching")
-    progress_bar = ((key, data_tuple) for key, data_tuple in dataloaders.items())
+    progress_bar = tqdm([(key, data_tuple) for key, data_tuple in dataloaders.items()])
 
     logger.info(f"Number of tasks: {len(dataloaders.keys())}")
 
     for dir_name, data_tuple in progress_bar:
         try:
-            if "test" in str(dir_name):
-                logger.warning(f"skipping {dir_name}")
-                continue
             train_X, train_y, test_X, test_y = (
                 data_tuple[0].iloc[:, :-1],
                 data_tuple[0].iloc[:, -1],
@@ -67,7 +65,7 @@ def main(
             logistic_model = get_predefined_logistic_regression()
             logistic_searcher = RandomSearch(logistic_model, logistic_grid)
 
-            logger.info(f"Start training {dir_name}")
+            progress_bar.set_description(dir_name)
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")

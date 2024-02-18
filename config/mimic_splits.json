@@ -1,0 +1,74 @@
+[
+    {
+        "train_tasks": [
+            "diabetes_diagnosed-10",
+            "anemia_diagnosed-10",
+            "heart_diagnosed-10",
+            "purpura_diagnosed-10",
+            "respiratory_diagnosed-10",
+            "atrial_diagnosed-10",
+            "hypertensive_diagnosed-10",
+            "overweight_diagnosed-10",
+            "lipoid_diagnosed-10"
+        ],
+        "test_tasks": [
+            "alcohol_diagnosed-10",
+            "ischematic_diagnosed-10",
+            "hypotension_diagnosed-10"
+        ]
+    },
+    {
+        "train_tasks": [
+            "alcohol_diagnosed-10",
+            "ischematic_diagnosed-10",
+            "hypotension_diagnosed-10",
+            "purpura_diagnosed-10",
+            "respiratory_diagnosed-10",
+            "atrial_diagnosed-10",
+            "hypertensive_diagnosed-10",
+            "overweight_diagnosed-10",
+            "lipoid_diagnosed-10"
+        ],
+        "test_tasks": [
+            "diabetes_diagnosed-10",
+            "anemia_diagnosed-10",
+            "heart_diagnosed-10"
+        ]
+    },
+    {
+        "train_tasks": [
+            "alcohol_diagnosed-10",
+            "ischematic_diagnosed-10",
+            "hypotension_diagnosed-10",
+            "diabetes_diagnosed-10",
+            "anemia_diagnosed-10",
+            "heart_diagnosed-10",
+            "hypertensive_diagnosed-10",
+            "overweight_diagnosed-10",
+            "lipoid_diagnosed-10"
+        ],
+        "test_tasks": [
+            "purpura_diagnosed-10",
+            "respiratory_diagnosed-10",
+            "atrial_diagnosed-10"
+        ]
+    },
+    {
+        "train_tasks": [
+            "alcohol_diagnosed-10",
+            "ischematic_diagnosed-10",
+            "hypotension_diagnosed-10",
+            "diabetes_diagnosed-10",
+            "anemia_diagnosed-10",
+            "heart_diagnosed-10",
+            "purpura_diagnosed-10",
+            "respiratory_diagnosed-10",
+            "atrial_diagnosed-10"
+        ],
+        "test_tasks": [
+            "hypertensive_diagnosed-10",
+            "overweight_diagnosed-10",
+            "lipoid_diagnosed-10"
+        ]
+    }
+]

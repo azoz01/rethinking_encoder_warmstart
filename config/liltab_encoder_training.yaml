@@ -18,4 +18,3 @@ is_classifier: True
 
 train_data_path: data/openml/encoder_training_data/train
 val_data_path: data/openml/encoder_training_data/val
-test_data_path: data/openml/encoder_training_data/test

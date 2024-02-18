@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import optuna
 import pandas as pd
@@ -7,7 +8,7 @@ import typer
 import warnings
 
 from copy import deepcopy
-from dataset2vec.train import LightningWrapper as D2vWrapper
+from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.train.utils import LightningWrapper as LiltabWrapper
 from functools import partial
 from itertools import product
@@ -22,28 +23,11 @@ from sklearn.metrics import roc_auc_score
 from torch import Tensor
 from tqdm import tqdm
 from typing import Callable, Annotated
+from xgboost import XGBClassifier
 
 app = typer.Typer()
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-# Only needed for liltab experiment
-training_datasets = [
-    "alcohol_diagnosed-10",
-    "hypotension_diagnosed-10",
-    "diabetes_diagnosed-10",
-    "anemia_diagnosed-10",
-    "purpura_diagnosed-10",
-    "respiratory_diagnosed-10",
-    "atrial_diagnosed-10",
-    "hypertensive_diagnosed-10",
-    "overweight_diagnosed-10",
-    "lipoid_diagnosed-10",
-]
-test_datasets = [
-    "heart_diagnosed-10",
-    "ischematic_diagnosed-10",
-]
 
 # Conversion of possible solver penalty pairs to mitigate
 # issue with non-supported conditional categorical variables.
@@ -125,13 +109,13 @@ def main(
         Path,
         typer.Option(..., help="Path to indexed hparams."),
     ],
-    ranks_path: Annotated[
-        Path,
-        typer.Option(..., help="Path to ranks of HP configurations."),
-    ],
     datasets_path: Annotated[
         Path,
         typer.Option(..., help="Path to directories with datasets."),
+    ],
+    fold: Annotated[
+        int,
+        typer.Option(..., help="Index of the CV fold."),
     ],
     liltab_encoder_path: Annotated[
         Path,
@@ -161,10 +145,6 @@ def main(
             "Can be mean, cdist_sum, greedy, mixed",
         ),
     ] = "mean",
-    fix_seed: Annotated[
-        bool,
-        typer.Option(..., help="Output path of results."),
-    ] = False,
     output_db_name: Annotated[
         str,
         typer.Option(..., help="Name of output database."),
@@ -174,8 +154,7 @@ def main(
         typer.Option(..., help="Output path of results."),
     ] = Path("results/warmstart_dbs"),
 ):
-    if fix_seed:
-        seed_everything(123)
+    seed_everything(123)
     output_path.mkdir(exist_ok=True)
 
     if init_trials_count == -1:
@@ -184,10 +163,8 @@ def main(
     logger.info("Loading encoders")
     liltab_encoder = LiltabWrapper.load_from_checkpoint(liltab_encoder_path).model
     d2v_encoder = D2vWrapper.load_from_checkpoint(d2v_encoder_path)
-    best_params_index = pd.read_parquet(index_path)
-    if experiment == "mimic":
-        best_params_index = best_params_index.loc[best_params_index.task.isin(training_datasets)]
-    hparams_ranks = pd.read_parquet(ranks_path).sort_values("rank")
+    best_params_index = pd.read_parquet(index_path / f"index_fold_{fold}.parquet")
+    hparams_ranks = pd.read_parquet(index_path / f"ranks_fold_{fold}.parquet").sort_values("rank")
 
     encoders = {
         "liltab": lambda X, y: liltab_encoder.encode_support_set(X, y),
@@ -272,33 +249,35 @@ def main(
             direction="maximize",
             sampler=TPESampler(n_startup_trials=init_trials_count),
         )
-        with torch.no_grad():
-            if task_encoder == "d2v":
-                warmstart = select_tasks_for_warmstart_d2v(
-                    X_test, y_test, best_params_index, warmstart_trials_count, task_encoder
-                )
-            elif task_encoder == "rank":
-                warmstart = select_task_for_warmstart_by_rank(warmstart_trials_count)
-            elif task_encoder == "liltab":
-                warmstart = select_tasks_for_warmstart_liltab(
-                    X_test,
-                    y_test,
-                    best_params_index,
-                    warmstart_trials_count,
-                    task_encoder,
-                    search_strategy,
-                )
-            else:
-                raise ValueError(f"Invalid encoder: {task_encoder}")
-        for _, row in warmstart.iterrows():
-            warmstart_trial = row["best_hpo"]
-            solver_penalty = (warmstart_trial["solver"], warmstart_trial["penalty"])
-            solver_penalty_idx = logistic_solver_penalty_pairs.index(solver_penalty)
-            warmstart_trial = deepcopy(warmstart_trial)
-            warmstart_trial["solver_penalty_idx"] = solver_penalty_idx
-            del warmstart_trial["solver"]
-            del warmstart_trial["penalty"]
-            study.enqueue_trial(warmstart_trial)
+
+        if task_encoder != "none":
+            with torch.no_grad():
+                if task_encoder == "d2v":
+                    warmstart = select_tasks_for_warmstart_d2v(
+                        X_test, y_test, best_params_index, warmstart_trials_count, task_encoder
+                    )
+                elif task_encoder == "rank":
+                    warmstart = select_task_for_warmstart_by_rank(warmstart_trials_count)
+                elif task_encoder == "liltab":
+                    warmstart = select_tasks_for_warmstart_liltab(
+                        X_test,
+                        y_test,
+                        best_params_index,
+                        warmstart_trials_count,
+                        task_encoder,
+                        search_strategy,
+                    )
+                else:
+                    raise ValueError(f"Invalid encoder: {task_encoder}")
+                for _, row in warmstart.iterrows():
+                    warmstart_trial = row["best_hpo_logistic"]
+                    solver_penalty = (warmstart_trial["solver"], warmstart_trial["penalty"])
+                    solver_penalty_idx = logistic_solver_penalty_pairs.index(solver_penalty)
+                    warmstart_trial = deepcopy(warmstart_trial)
+                    warmstart_trial["solver_penalty_idx"] = solver_penalty_idx
+                    del warmstart_trial["solver"]
+                    del warmstart_trial["penalty"]
+                    study.enqueue_trial(warmstart_trial)
         study.optimize(
             partial(
                 objective_logistic_regression,
@@ -338,18 +317,97 @@ def main(
 
         model = LogisticRegression(**params)
         model.fit(X_train, y_train.values.reshape(-1))
-        test_proba = model.predict_proba(X_test)
-        if test_proba.shape[1] == 2:
-            test_proba = test_proba[:, 1]
-            return metric(y_test, test_proba)
-        else:
-            return metric(y_test.values.ravel(), test_proba, multi_class="ovo")
+        test_proba = model.predict_proba(X_test)[:, 1]
+        return metric(y_test, test_proba)
 
-    optimizations = [optimize_logistic_regression]
+    def optimize_xgboost(
+        X_train: pd.DataFrame,
+        y_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_test: pd.DataFrame,
+        task_id: str,
+        search_strategy: str,
+        task_encoder: str = "liltab",
+        warmstart_trials_count: int = 5,
+        n_trials: int = 20,
+        db_name: str = "ho_base",
+        output_path: Path = Path("results/warmstart_dbs"),
+    ) -> None:
+        study = optuna.create_study(
+            storage=f"sqlite:///{str(output_path) + '/' + db_name}.db",
+            study_name=(
+                f"{task_id}_xgboost_{task_encoder}"
+                f"{f'_warmstart_{warmstart_trials_count}' if warmstart_trials_count > 0 else ''}"
+            ),
+            direction="maximize",
+            sampler=TPESampler(n_startup_trials=init_trials_count),
+        )
+        if task_encoder != "none":
+            with torch.no_grad():
+                if task_encoder == "d2v":
+                    warmstart = select_tasks_for_warmstart_d2v(
+                        X_test, y_test, best_params_index, warmstart_trials_count, task_encoder
+                    )
+                elif task_encoder == "rank":
+                    warmstart = select_task_for_warmstart_by_rank(warmstart_trials_count)
+                elif task_encoder == "liltab":
+                    warmstart = select_tasks_for_warmstart_liltab(
+                        X_test,
+                        y_test,
+                        best_params_index,
+                        warmstart_trials_count,
+                        task_encoder,
+                        search_strategy,
+                    )
+                else:
+                    raise ValueError(f"Invalid encoder: {task_encoder}")
+                for _, row in warmstart.iterrows():
+                    warmstart_trial = row["best_hpo_xgboost"]
+                    study.enqueue_trial(warmstart_trial)
+        study.optimize(
+            partial(
+                objective_xgboost,
+                X_train=X_train,
+                y_train=y_train,
+                X_test=X_test,
+                y_test=y_test,
+                metric=roc_auc_score,
+            ),
+            n_trials=n_trials,
+        )
+
+    def objective_xgboost(
+        trial: optuna.Trial,
+        X_train: pd.DataFrame,
+        y_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_test: pd.DataFrame,
+        metric: Callable,
+    ) -> float:
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 1, 1000),
+            "learning_rate": trial.suggest_float("learning_rate", 0, 1),
+            "booster": trial.suggest_categorical("booster", ["gblinear", "gbtree"]),
+            "subsample": trial.suggest_float("subsample", 0.5, 1),
+            "max_depth": trial.suggest_int("max_depth", 6, 15),
+            "min_child_weight": trial.suggest_float("min_child_weight", 2, 256),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.2, 1),
+            "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.2, 1),
+            "n_jobs": -1,
+        }
+        model = XGBClassifier(**params)
+        model.fit(X_train, y_train.values.reshape(-1))
+        test_proba = model.predict_proba(X_test)[:, 1]
+        return metric(y_test, test_proba)
+
+    if experiment == "uci":
+        optimizations = [optimize_logistic_regression, optimize_xgboost]
+    else:
+        optimizations = [optimize_logistic_regression]
     kwargs_list = [
-        {"task_encoder": "d2v", "warmstart_trials_count": 0},  # baseline
-        {"task_encoder": "d2v", "warmstart_trials_count": warmstart_trials_count},  # d2v eval
         {"task_encoder": "rank", "warmstart_trials_count": warmstart_trials_count},  # rank eval
+        {"task_encoder": "none", "warmstart_trials_count": 0},  # baseline
+        {"task_encoder": "d2v", "warmstart_trials_count": warmstart_trials_count},  # d2v eval
         {"task_encoder": "liltab", "warmstart_trials_count": warmstart_trials_count},  # liltab eval
     ]
 
@@ -364,6 +422,7 @@ def main(
             warnings.filterwarnings("ignore", category=LinAlgWarning)
             warnings.filterwarnings("ignore", category=UserWarning)
             for optimization, kwargs in product(optimizations, kwargs_list):
+                logger.info(f"{optimization}, {kwargs}, {task_path}")
                 optimization(
                     X_train,
                     y_train,
@@ -378,13 +437,17 @@ def main(
                 )
 
     if experiment == "uci":
-        paths = list(datasets_path.iterdir())
-        it = tqdm(paths)
-        for task_path in it:
+        with open("config/uci_splits.json") as f:
+            test_tasks = json.load(f)[fold]["test_tasks"]
+        it = tqdm(test_tasks)
+        for task in it:
+            task_path = datasets_path / task
             it.set_description(str(task_path))
             calculate_experiment_for_task(task_path, task_path.stem)
     else:
-        for task in test_datasets:
+        with open("config/mimic_splits.json") as f:
+            test_tasks = json.load(f)[fold]["test_tasks"]
+        for task in test_tasks:
             dataset_path = datasets_path / task
             dataset_name = dataset_path.name.split("-")[0]
             tasks = list(dataset_path.iterdir())[:300]

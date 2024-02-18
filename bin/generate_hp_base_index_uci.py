@@ -1,10 +1,11 @@
+import json
 import numpy as np
 import pandas as pd
 import shutil
 import pickle as pkl
 import typer
 
-from dataset2vec.train import LightningWrapper as D2vWrapper
+from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.train.utils import LightningWrapper as LiltabWrapper
 from loguru import logger
 from itertools import starmap
@@ -20,14 +21,20 @@ from tqdm import tqdm
 app = typer.Typer()
 
 
-def process_hpo_base(hpo, scores, encoders, data_path):
+def process_hpo_base(hpo, scores, encoders, data_path, tasks_to_index):
     logger.info("Generating ranks")
-    items = list(scores.items())
+    filtered_scores = dict(
+        list(
+            filter(
+                lambda en: any([en[0].split("/")[-1] == task for task in tasks_to_index]),
+                scores.items(),
+            )
+        )
+    )
+    items = list(filtered_scores.items())
     best_flags = list(
         map(
-            lambda x: (
-                (np.array(x[1]) == np.max(x[1])) & ((np.array(x[1]) == np.max(x[1])).sum() == 1)
-            ).astype(int),
+            lambda x: ((np.array(x[1]) == np.max(x[1]))).astype(int),
             items,
         )
     )
@@ -84,7 +91,7 @@ def main(
         Path, typer.Option(..., help="Path to hyperparameter optimisation results")
     ] = Path("results/hpo_uci"),
     data_path: Annotated[Path, typer.Option(..., help="Path to tasks to index")] = Path(
-        "data/uci/splitted/train"
+        "data/uci/splitted"
     ),
     liltab_encoder_path: Annotated[
         Path, typer.Option(..., help="Path to liltab encoder path")
@@ -110,46 +117,52 @@ def main(
         "d2v": d2v_encoder,
     }
 
-    logger.info("Processing logistic regression")
-    with open(hpo_base_path / "logistic_parameters_base.pkl", "rb") as f:
-        hpo = pkl.load(f)
+    with open("config/uci_splits.json") as f:
+        folds = json.load(f)
+    for i, fold in enumerate(folds):
+        logger.info(f"Processing fold {i}")
+        logger.info("Processing logistic regression")
+        with open(hpo_base_path / "logistic_parameters_base.pkl", "rb") as f:
+            hpo = pkl.load(f)
 
-    with open(hpo_base_path / "logistic_scores_base.pkl", "rb") as f:
-        scores = pkl.load(f)["<class 'sklearn.linear_model._logistic.LogisticRegression'>"]
+        with open(hpo_base_path / "logistic_scores_base.pkl", "rb") as f:
+            scores = pkl.load(f)["<class 'sklearn.linear_model._logistic.LogisticRegression'>"]
+        output_index_logistic, output_ranks_logistic = process_hpo_base(
+            hpo, scores, encoders, data_path, fold["train_tasks"]
+        )
+        output_index_logistic = output_index_logistic.rename(
+            columns={"best_hpo": "best_hpo_logistic", "best_score": "best_score_logistic"}
+        )
+        output_ranks_logistic = output_ranks_logistic.rename(
+            columns={"best_hpo": "best_hpo_logistic"}
+        )
 
-    output_index_logistic, output_ranks_logistic = process_hpo_base(
-        hpo, scores, encoders, data_path
-    )
-    output_index_logistic = output_index_logistic.rename(
-        columns={"best_hpo": "best_hpo_logistic", "best_score": "best_score_logistic"}
-    )
-    output_ranks_logistic = output_ranks_logistic.rename(columns={"best_hpo": "best_hpo_logistic"})
+        logger.info("Processing xgboost")
+        with open(hpo_base_path / "xgboost_parameters_base.pkl", "rb") as f:
+            hpo = pkl.load(f)
 
-    logger.info("Processing xgboost")
-    with open(hpo_base_path / "xgboost_parameters_base.pkl", "rb") as f:
-        hpo = pkl.load(f)
+        with open(hpo_base_path / "xgboost_scores_base.pkl", "rb") as f:
+            scores = pkl.load(f)["<class 'xgboost.sklearn.XGBClassifier'>"]
 
-    with open(hpo_base_path / "xgboost_scores_base.pkl", "rb") as f:
-        scores = pkl.load(f)["<class 'xgboost.sklearn.XGBClassifier'>"]
+        output_index_xgboost, output_ranks_xgboost = process_hpo_base(
+            hpo, scores, encoders, data_path, fold["train_tasks"]
+        )
+        output_index_xgboost = output_index_xgboost.rename(
+            columns={"best_hpo": "best_hpo_xgboost", "best_score": "best_score_xgboost"}
+        )
+        output_ranks_xgboost = output_ranks_xgboost.rename(columns={"best_hpo": "best_hpo_xgboost"})
 
-    output_index_xgboost, output_ranks_xgboost = process_hpo_base(hpo, scores, encoders, data_path)
-    output_index_xgboost = output_index_xgboost.rename(
-        columns={"best_hpo": "best_hpo_xgboost", "best_score": "best_score_xgboost"}
-    )
-    output_ranks_xgboost = output_ranks_xgboost.rename(columns={"best_hpo": "best_hpo_xgboost"})
+        output_index = output_index_logistic.merge(
+            output_index_xgboost[["task", "best_hpo_xgboost", "best_score_xgboost"]],
+            how="inner",
+            on=["task"],
+        )
+        output_ranks = output_ranks_logistic.merge(
+            output_ranks_xgboost, how="inner", on="rank"
+        ).sort_values("rank")
 
-    output_index = output_index_logistic.merge(
-        output_index_xgboost[["task", "best_hpo_xgboost", "best_score_xgboost"]],
-        how="inner",
-        on=["task"],
-    )
-    output_ranks = output_ranks_logistic.merge(
-        output_ranks_xgboost, how="inner", on="rank"
-    ).sort_values("rank")
-
-    logger.info(output_results_path / "index.parquet")
-    output_index.to_parquet(output_results_path / "index.parquet", index=False)
-    output_ranks.to_parquet(output_results_path / "ranks.parquet", index=False)
+        output_index.to_parquet(output_results_path / f"index_fold_{i}.parquet", index=False)
+        output_ranks.to_parquet(output_results_path / f"ranks_fold_{i}.parquet", index=False)
 
 
 if __name__ == "__main__":
