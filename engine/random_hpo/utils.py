@@ -11,7 +11,9 @@ from .searchers.search_grid import ConditionalGrid, CubeGrid
 
 def get_logistic_regression_grid(init_seed: int = None) -> ConditionalGrid:
     grid_base = CubeGrid()
-    grid_base.add("tol", values=[0.0001, 0.001], space="real", distribution="loguniform")
+    grid_base.add(
+        "tol", values=[0.0001, 0.001], space="real", distribution="loguniform"
+    )
     grid_base.add("C", values=[0.0001, 10000], space="real", distribution="loguniform")
     grid_base.add(
         "solver",
@@ -41,7 +43,9 @@ def get_logistic_regression_grid(init_seed: int = None) -> ConditionalGrid:
         lambda hpo: hpo["solver"] == "liblinear" and hpo["penalty"] == "l2",
     )
     cond_grid.add_cube(grid_saga, lambda hpo: hpo["solver"] == "saga")
-    cond_grid.add_cube(grid_others, lambda hpo: hpo["solver"] not in ("liblinear", "saga"))
+    cond_grid.add_cube(
+        grid_others, lambda hpo: hpo["solver"] not in ("liblinear", "saga")
+    )
 
     cond_grid.reset_seed(123)
 
@@ -60,7 +64,9 @@ def get_xgboost_grid() -> ConditionalGrid:
     base_grid.add("booster", values=["gblinear", "gbtree"], space="cat")
     base_grid.add("subsample", values=[0.5, 1], space="real")
     base_grid.add("max_depth", values=[6, 15], space="int")
-    base_grid.add("min_child_weight", values=[2, 256], space="real", distribution="uniform")
+    base_grid.add(
+        "min_child_weight", values=[2, 256], space="real", distribution="uniform"
+    )
     base_grid.add("colsample_bytree", values=[0.2, 1], space="real")
     base_grid.add("colsample_bylevel", values=[0.2, 1], space="real")
 

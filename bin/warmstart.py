@@ -1,29 +1,30 @@
 import json
+import warnings
+from copy import deepcopy
+from functools import partial
+from itertools import product
+from pathlib import Path
+from typing import Annotated, Callable
+
 import numpy as np
 import optuna
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
 import torch
 import typer
-import warnings
-
-from copy import deepcopy
-from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.train.utils import LightningWrapper as LiltabWrapper
-from functools import partial
-from itertools import product
 from loguru import logger
 from optuna.samplers import TPESampler
-from pathlib import Path
 from pytorch_lightning import seed_everything
 from scipy.linalg import LinAlgWarning
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import OneHotEncoder
 from torch import Tensor
 from tqdm import tqdm
-from typing import Callable, Annotated
 from xgboost import XGBClassifier
+
+from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 
 app = typer.Typer()
 
@@ -51,7 +52,9 @@ logistic_solver_penalty_pairs = [
 
 def find_closest_by_mean(representation: Tensor, index: pd.Series, select_top_n: int):
     distances = index.apply(
-        lambda x: ((representation.mean(axis=0) - (np.stack(x, axis=0)).mean(axis=0) ** 2)).sum()
+        lambda x: (
+            (representation.mean(axis=0) - (np.stack(x, axis=0)).mean(axis=0) ** 2)
+        ).sum()
     ).values
     top_n_idx = np.argsort(distances)[:select_top_n]
     return top_n_idx
@@ -61,7 +64,8 @@ def find_closest_by_cdist(representation: Tensor, index: pd.Series, select_top_n
     distances = index.apply(
         lambda x: (
             torch.cdist(
-                representation, torch.from_numpy(np.stack(x, axis=0)).type(torch.FloatTensor)
+                representation,
+                torch.from_numpy(np.stack(x, axis=0)).type(torch.FloatTensor),
             )
         ).sum()
     ).values
@@ -70,7 +74,9 @@ def find_closest_by_cdist(representation: Tensor, index: pd.Series, select_top_n
 
 
 def find_closest_greedy(representation: Tensor, index: pd.Series, select_top_n: int):
-    all_index = np.concatenate(list(map(lambda arr: np.stack(arr, axis=0), index.values)), axis=0)
+    all_index = np.concatenate(
+        list(map(lambda arr: np.stack(arr, axis=0), index.values)), axis=0
+    )
     dists = torch.cdist(representation, Tensor(all_index))
     mins = (torch.argmin(dists, dim=1) // 27).tolist()
     mins = np.random.choice(mins, select_top_n).tolist()
@@ -85,13 +91,18 @@ def find_closest_mixed(
     select_top_n: int,
 ):
     # d2v
-    distances_d2v = index_d2v.apply(lambda x: ((representation_d2v - x) ** 2).sum()).values
+    distances_d2v = index_d2v.apply(
+        lambda x: ((representation_d2v - x) ** 2).sum()
+    ).values
     top_n_idx_d2v = np.argsort(distances_d2v)[:select_top_n].tolist()
 
     # liltab
     distances_liltab = index_liltab.apply(
         lambda x: (
-            (representation_liltab.mean(axis=0) - (np.stack(x, axis=0)).mean(axis=0) ** 2)
+            (
+                representation_liltab.mean(axis=0)
+                - (np.stack(x, axis=0)).mean(axis=0) ** 2
+            )
         ).sum()
     ).values
     top_n_idx_liltab = np.argsort(distances_liltab)[:select_top_n].tolist()
@@ -155,7 +166,7 @@ def main(
     ] = Path("results/warmstart_dbs"),
 ):
     seed_everything(123)
-    output_path.mkdir(exist_ok=True)
+    output_path.mkdir(exist_ok=True, parents=True)
 
     if init_trials_count == -1:
         init_trials_count = warmstart_trials_count
@@ -164,7 +175,9 @@ def main(
     liltab_encoder = LiltabWrapper.load_from_checkpoint(liltab_encoder_path).model
     d2v_encoder = D2vWrapper.load_from_checkpoint(d2v_encoder_path)
     best_params_index = pd.read_parquet(index_path / f"index_fold_{fold}.parquet")
-    hparams_ranks = pd.read_parquet(index_path / f"ranks_fold_{fold}.parquet").sort_values("rank")
+    hparams_ranks = pd.read_parquet(
+        index_path / f"ranks_fold_{fold}.parquet"
+    ).sort_values("rank")
 
     encoders = {
         "liltab": lambda X, y: liltab_encoder.encode_support_set(X, y),
@@ -211,7 +224,11 @@ def main(
         return deepcopy(index.iloc[top_n_idx])
 
     def select_tasks_for_warmstart_d2v(
-        X: pd.DataFrame, y: pd.DataFrame, index: pd.DataFrame, select_top_n: int, encoder_name: str
+        X: pd.DataFrame,
+        y: pd.DataFrame,
+        index: pd.DataFrame,
+        select_top_n: int,
+        encoder_name: str,
     ) -> pd.DataFrame:
         if y.nunique().values[0] > 2:
             oh = OneHotEncoder(sparse_output=False).set_output(transform="pandas")
@@ -220,7 +237,9 @@ def main(
         encoder = encoders[encoder_name]
         task_representation = encoder(X, y).detach().numpy()
         col = f"{encoder_name}_encoding"
-        distances = index[col].apply(lambda x: ((task_representation - x) ** 2).sum()).values
+        distances = (
+            index[col].apply(lambda x: ((task_representation - x) ** 2).sum()).values
+        )
         top_n_idx = np.argsort(distances)[:select_top_n]
         return deepcopy(index.iloc[top_n_idx])
 
@@ -254,10 +273,16 @@ def main(
             with torch.no_grad():
                 if task_encoder == "d2v":
                     warmstart = select_tasks_for_warmstart_d2v(
-                        X_test, y_test, best_params_index, warmstart_trials_count, task_encoder
+                        X_test,
+                        y_test,
+                        best_params_index,
+                        warmstart_trials_count,
+                        task_encoder,
                     )
                 elif task_encoder == "rank":
-                    warmstart = select_task_for_warmstart_by_rank(warmstart_trials_count)
+                    warmstart = select_task_for_warmstart_by_rank(
+                        warmstart_trials_count
+                    )
                 elif task_encoder == "liltab":
                     warmstart = select_tasks_for_warmstart_liltab(
                         X_test,
@@ -271,8 +296,13 @@ def main(
                     raise ValueError(f"Invalid encoder: {task_encoder}")
                 for _, row in warmstart.iterrows():
                     warmstart_trial = row["best_hpo_logistic"]
-                    solver_penalty = (warmstart_trial["solver"], warmstart_trial["penalty"])
-                    solver_penalty_idx = logistic_solver_penalty_pairs.index(solver_penalty)
+                    solver_penalty = (
+                        warmstart_trial["solver"],
+                        warmstart_trial["penalty"],
+                    )
+                    solver_penalty_idx = logistic_solver_penalty_pairs.index(
+                        solver_penalty
+                    )
                     warmstart_trial = deepcopy(warmstart_trial)
                     warmstart_trial["solver_penalty_idx"] = solver_penalty_idx
                     del warmstart_trial["solver"]
@@ -299,7 +329,9 @@ def main(
         metric: Callable,
     ) -> float:
         solver_penalty = logistic_solver_penalty_pairs[
-            trial.suggest_int("solver_penalty_idx", 0, len(logistic_solver_penalty_pairs) - 1)
+            trial.suggest_int(
+                "solver_penalty_idx", 0, len(logistic_solver_penalty_pairs) - 1
+            )
         ]
         params = {
             "tol": trial.suggest_float("tol", 1e-4, 1e-3, log=True),
@@ -309,7 +341,9 @@ def main(
             "max_iter": 500,
         }
         if params["solver"] == "liblinear":
-            params["intercept_scaling"] = trial.suggest_float("intercept_scaling", 1e-3, 1)
+            params["intercept_scaling"] = trial.suggest_float(
+                "intercept_scaling", 1e-3, 1
+            )
             if params["penalty"] == "l2":
                 params["dual"] = trial.suggest_categorical("dual", [True, False])
         elif params["solver"] == "saga":
@@ -346,10 +380,16 @@ def main(
             with torch.no_grad():
                 if task_encoder == "d2v":
                     warmstart = select_tasks_for_warmstart_d2v(
-                        X_test, y_test, best_params_index, warmstart_trials_count, task_encoder
+                        X_test,
+                        y_test,
+                        best_params_index,
+                        warmstart_trials_count,
+                        task_encoder,
                     )
                 elif task_encoder == "rank":
-                    warmstart = select_task_for_warmstart_by_rank(warmstart_trials_count)
+                    warmstart = select_task_for_warmstart_by_rank(
+                        warmstart_trials_count
+                    )
                 elif task_encoder == "liltab":
                     warmstart = select_tasks_for_warmstart_liltab(
                         X_test,
@@ -405,10 +445,19 @@ def main(
     else:
         optimizations = [optimize_logistic_regression]
     kwargs_list = [
-        {"task_encoder": "rank", "warmstart_trials_count": warmstart_trials_count},  # rank eval
+        {
+            "task_encoder": "rank",
+            "warmstart_trials_count": warmstart_trials_count,
+        },  # rank eval
         {"task_encoder": "none", "warmstart_trials_count": 0},  # baseline
-        {"task_encoder": "d2v", "warmstart_trials_count": warmstart_trials_count},  # d2v eval
-        {"task_encoder": "liltab", "warmstart_trials_count": warmstart_trials_count},  # liltab eval
+        {
+            "task_encoder": "d2v",
+            "warmstart_trials_count": warmstart_trials_count,
+        },  # d2v eval
+        {
+            "task_encoder": "liltab",
+            "warmstart_trials_count": warmstart_trials_count,
+        },  # liltab eval
     ]
 
     def calculate_experiment_for_task(task_path: Path, task_id: str) -> None:

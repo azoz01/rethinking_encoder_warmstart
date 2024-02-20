@@ -1,31 +1,32 @@
-import shutil
-import typer
 import pickle as pkl
+import shutil
 import warnings
-
-from loguru import logger
+from itertools import chain
 from pathlib import Path
+
+import typer
+from loguru import logger
 from pytorch_lightning import seed_everything
 from sklearn.metrics import roc_auc_score as metric
 from tqdm import tqdm
 from typing_extensions import Annotated
 
+from engine.random_hpo.searchers.hpo_searchers import RandomSearch
 from engine.random_hpo.utils import (
     get_datasets,
     get_logistic_regression_grid,
     get_predefined_logistic_regression,
     put_results,
 )
-from engine.random_hpo.searchers.hpo_searchers import RandomSearch
 
 app = typer.Typer()
 
 
 @app.command(help="Generate hyperparameter base.")
 def main(
-    input_data_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
-        "data/mimic/mini_holdout"
-    ),
+    input_data_path: Annotated[
+        Path, typer.Option(..., help="Path to input tasks")
+    ] = Path("data/mimic/mini_holdout"),
     n_tasks_per_dataset: Annotated[
         int,
         typer.Option(
@@ -40,16 +41,18 @@ def main(
             help="Number of combinations in random search.",
         ),
     ] = 100,
-    output_results_path: Annotated[Path, typer.Option(..., help="Path to input tasks")] = Path(
-        "results/hpo_mimic"
-    ),
+    output_results_path: Annotated[
+        Path, typer.Option(..., help="Path to input tasks")
+    ] = Path("results/hpo_mimic"),
 ) -> None:
     seed_everything(123)
     if output_results_path.exists():
         shutil.rmtree(output_results_path)
     output_results_path.mkdir()
     logger.info("Loading datasets")
-    dataloaders = get_datasets(input_data_path)
+    dataloaders = dict(
+        chain(*[get_datasets(p).items() for p in input_data_path.iterdir()])
+    )
 
     logger.info("Start searching")
     progress_bar = tqdm(
@@ -77,7 +80,12 @@ def main(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             logistic_searcher.search_holdout(
-                train_X, train_y, test_X, test_y, metric, n_iter=number_of_random_combinations
+                train_X,
+                train_y,
+                test_X,
+                test_y,
+                metric,
+                n_iter=number_of_random_combinations,
             )
 
         put_results(
