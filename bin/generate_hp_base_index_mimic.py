@@ -24,7 +24,10 @@ def process_hpo_base(hpo, scores, encoders, tasks_to_index):
     items = list(filter(lambda item: item[0].split("/")[-2] in tasks_to_index, items))
     best_flags = list(
         map(
-            lambda x: ((np.array(x[1]) == np.max(x[1]))).astype(int),
+            lambda x: (
+                (np.array(x[1]) == np.max(x[1]))
+                & ((np.array(x[1]) == np.max(x[1])).sum() <= 3)
+            ).astype(int),
             items,
         )
     )
