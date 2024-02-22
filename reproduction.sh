@@ -49,3 +49,5 @@ for i in $(seq 0 3); do
         --warmstart-trials-count=10 \
         --fold=$i
 done
+
+mkdir results/warmstart_plots
