@@ -1,0 +1,57 @@
+[
+    {
+        "train_tasks": [
+            "cylinder-bands",
+            "monks-2",
+            "pima",
+            "spect"
+        ],
+        "test_tasks": [
+            "breast-cancer"
+        ]
+    },
+    {
+        "train_tasks": [
+            "breast-cancer",
+            "monks-2",
+            "pima",
+            "spect"
+        ],
+        "test_tasks": [
+            "cylinder-bands"
+        ]
+    },
+    {
+        "train_tasks": [
+            "breast-cancer",
+            "cylinder-bands",
+            "pima",
+            "spect"
+        ],
+        "test_tasks": [
+            "monks-2"
+        ]
+    },
+    {
+        "train_tasks": [
+            "breast-cancer",
+            "cylinder-bands",
+            "monks-2",
+            "spect"
+        ],
+        "test_tasks": [
+            "pima"
+        ]
+    },
+    {
+        "train_tasks": [
+            "breast-cancer",
+            "cylinder-bands",
+            "monks-2",
+            "pima"
+        ],
+        "test_tasks": [
+            "spect"
+        ]
+    }
+]
