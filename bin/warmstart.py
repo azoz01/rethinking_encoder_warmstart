@@ -266,7 +266,7 @@ def main(
                 f"{f'_warmstart_{warmstart_trials_count}' if warmstart_trials_count > 0 else ''}"
             ),
             direction="maximize",
-            sampler=TPESampler(n_startup_trials=init_trials_count),
+            sampler=TPESampler(n_startup_trials=init_trials_count, seed=123),
         )
 
         if task_encoder != "none":
@@ -374,7 +374,7 @@ def main(
                 f"{f'_warmstart_{warmstart_trials_count}' if warmstart_trials_count > 0 else ''}"
             ),
             direction="maximize",
-            sampler=TPESampler(n_startup_trials=init_trials_count),
+            sampler=TPESampler(n_startup_trials=init_trials_count, seed=123),
         )
         if task_encoder != "none":
             with torch.no_grad():
