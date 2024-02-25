@@ -8,7 +8,6 @@ from liltab.train.utils import LightningWrapper as LiltabWrapper
 from engine.dataset2vec.train import LightningWrapper as D2vWrapper
 from liltab.data.datasets import PandasDataset
 from loguru import logger
-from matplotlib import rcParams
 from pathlib import Path
 from sklearn.manifold import TSNE
 from pytorch_lightning import seed_everything
@@ -77,8 +76,15 @@ def main(
     df.to_csv(output_plots_path / "liltab_uci.csv", index=False)
 
     logger.info("Generating liltab scatter plot.")
-    rcParams["figure.figsize"] = (16, 9)
-    sns.scatterplot(data=df, x=df["x"], y=df["y"], hue=df["label"], palette="husl")
+    plt.rcParams["figure.figsize"] = (14, 6)
+    p = sns.scatterplot(x=df.x, y=df.y, hue=df.label, s=60)
+    plt.legend(loc=(0, 1.05), ncol=4, frameon=False)
+    p.set_ylabel("y", fontsize=22)
+    p.set_xlabel("x", fontsize=22)
+    p.tick_params(labelsize=18)
+    p.tick_params(labelsize=13)
+    plt.setp(p.get_legend().get_title(), fontsize=22)
+    plt.setp(p.get_legend().get_texts(), fontsize=22)
     plt.savefig(output_plots_path / "liltab_uci_representations.png")
     plt.clf()
 
