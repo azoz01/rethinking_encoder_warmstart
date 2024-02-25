@@ -55,4 +55,4 @@ done
 mkdir results/warmstart_plots
 
 python bin/generate_warmstart_plots_uci.py
-python bin/generate_warmstart_plots_mimic.py
+# python bin/generate_warmstart_plots_mimic.py
