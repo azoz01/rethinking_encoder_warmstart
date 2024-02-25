@@ -19,7 +19,7 @@ def suffix_func(name):
         return "d2v"
     if "rank" in name:
         return "rank"
-    return "baseline"
+    return "no-warmstart"
 
 
 def model_name_func(name):
@@ -150,7 +150,7 @@ for i, model in enumerate(models):
             plt.setp(p.get_legend().get_texts(), fontsize=22)
         else:
             p.legend([], [], frameon=False)
-plt.savefig("results/warmstart_plots/uci_adtm_logistic.png")
+plt.savefig("results/warmstart_plots/uci_adtm_logistic.png", bbox_inches="tight")
 plt.clf()
 
 models = ["xgboost"]
@@ -182,7 +182,7 @@ for i, model in enumerate(models):
             plt.setp(p.get_legend().get_texts(), fontsize=22)
         else:
             p.legend([], [], frameon=False)
-plt.savefig("results/warmstart_plots/uci_adtm_xgboost.png")
+plt.savefig("results/warmstart_plots/uci_adtm_xgboost.png", bbox_inches="tight")
 plt.clf()
 
 models = ["logistic", "xgboost"]
