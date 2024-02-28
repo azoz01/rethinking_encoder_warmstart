@@ -1,11 +1,12 @@
-import optuna
 import re
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
+import optuna
 import pandas as pd
+import seaborn as sns
 from tqdm import tqdm
-from pathlib import Path
 
 from engine.cd_plot import draw_cd_diagram
 
@@ -36,16 +37,21 @@ def generate_plot_df(study_path):
     study_full_names = list(map(lambda study: study.study_name, res))
     study_methods = list(map(lambda name: suffix_func(name), study_full_names))
     study_models = list(map(lambda name: model_name_func(name), study_full_names))
-    study_names = list(map(lambda m: re.split(r"_logistic|_xgboost", m)[0], study_full_names))
+    study_names = list(
+        map(lambda m: re.split(r"_logistic|_xgboost", m)[0], study_full_names)
+    )
 
     p_bar = tqdm(
-        (zip(study_names, study_methods, study_models, study_full_names)), total=len(study_names)
+        (zip(study_names, study_methods, study_models, study_full_names)),
+        total=len(study_names),
     )
 
     df = pd.DataFrame()
 
     for name, method, model, full_name in p_bar:
-        study = optuna.load_study(study_name=full_name, storage=f"sqlite:///{study_path}")
+        study = optuna.load_study(
+            study_name=full_name, storage=f"sqlite:///{study_path}"
+        )
 
         study_scores = list(map(lambda trail: trail.value, study.trials))
         study_scores_best = list(np.maximum.accumulate(study_scores))
@@ -65,7 +71,7 @@ def generate_plot_df(study_path):
     return df
 
 
-paths = list(Path("results/warmstart_dbs/uci").iterdir())
+paths = list(sorted(Path("results/warmstart_dbs/uci").iterdir()))
 plot_dfs = list(map(generate_plot_df, tqdm(paths)))
 for i, d in enumerate(plot_dfs):
     d["fold"] = i
@@ -75,7 +81,12 @@ df.to_csv("results/warmstart_plots/uci_df.csv", index=False)
 
 # Count of tasks when method is best in i-th iteration
 df = pd.read_csv("results/warmstart_plots/uci_df.csv")
-df_grouped = df.sort_values("score").groupby(["fold", "name", "model", "no"]).last().reset_index()
+df_grouped = (
+    df.sort_values("score")
+    .groupby(["fold", "name", "model", "no"])
+    .last()
+    .reset_index()
+)
 results = df_grouped.groupby(["fold", "no", "model", "method"]).count().reset_index()
 models = ["logistic", "xgboost"]
 fold_ids = list(range(5))
@@ -85,7 +96,9 @@ fig, ax = plt.subplots(ncols=5, nrows=2, figsize=(25, 9))
 for i, model in enumerate(models):
     for j, fold in enumerate(fold_ids):
         p = sns.lineplot(
-            results[(results["model"] == model) & (results["fold"] == fold)].sort_values("method"),
+            results[
+                (results["model"] == model) & (results["fold"] == fold)
+            ].sort_values("method"),
             x="no",
             y="score",
             hue="method",
@@ -117,10 +130,12 @@ df_with_min_max["score"] = (df_with_min_max["score"] - df_with_min_max["min"]) /
     df_with_min_max["max"] - df_with_min_max["min"]
 )
 df_with_min_max["max_minus_score"] = 1 - df_with_min_max["score"]
-df_with_min_max = df_with_min_max[["fold", "name", "model", "method", "no", "max_minus_score"]]
-df_with_min_max.loc[df_with_min_max.max_minus_score == 0].groupby(["model", "method"]).agg(
-    {"name": lambda x: x.nunique()}
-)
+df_with_min_max = df_with_min_max[
+    ["fold", "name", "model", "method", "no", "max_minus_score"]
+]
+df_with_min_max.loc[df_with_min_max.max_minus_score == 0].groupby(
+    ["model", "method"]
+).agg({"name": lambda x: x.nunique()})
 models = ["logistic"]
 fold_ids = list(range(5))
 
@@ -190,7 +205,9 @@ iterations = [9, 29]
 for model in models:
     for it in iterations:
         df_to_cd = (
-            df_with_min_max.loc[(df_with_min_max.no == it) & (df_with_min_max.model == model)]
+            df_with_min_max.loc[
+                (df_with_min_max.no == it) & (df_with_min_max.model == model)
+            ]
             .rename(
                 columns={
                     "method": "classifier_name",
