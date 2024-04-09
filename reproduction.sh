@@ -20,6 +20,9 @@ cp `find results/dataset2vec -name epoch\*.ckpt -print` models/d2v.ckpt
 python bin/generate_plots_uci.py
 # python bin/generate_plots_mimic.py
 
+python bin/calculate_representation_metrics_uci.py
+# python bin/calculate_representation_metrics_mimic.py
+
 python bin/generate_hpo_random_base_uci.py
 # python bin/generate_hpo_random_base_mimic.py
 
