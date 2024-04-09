@@ -1,19 +1,18 @@
 import json
+import warnings
+from functools import reduce
+from itertools import chain
+from operator import add
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-import warnings
-
-from itertools import chain
-from functools import reduce
-from operator import add
 from liltab.train.utils import LightningWrapper as LiltabWrapper
 from loguru import logger
-from pathlib import Path
 from torch import Tensor
 from tqdm import tqdm
-
 
 from engine.dataset2vec.data import get_preprocessing_pipeline
 from engine.dataset2vec.train import LightningWrapper as D2vWrapper
@@ -140,12 +139,12 @@ def main():
     }
 
     logger.info("Calculating accuracy")
-    for _ in tqdm(range(10)):
+    for _ in tqdm(range(15)):
         calibration_tasks = [
             get_sample_for_accuracy(datasets) for _ in range(1000)
         ]
         evaluation_tasks = [
-            get_sample_for_accuracy(datasets) for _ in range(10000)
+            get_sample_for_accuracy(datasets) for _ in range(5000)
         ]
         for encoder_name in ["d2v", "liltab"]:
             encoder = encoders[encoder_name]
@@ -156,7 +155,7 @@ def main():
             metrics[encoder_name]["accuracy"].append(accuracy)
 
     logger.info("Calculating CH index")
-    for _ in tqdm(range(10)):
+    for _ in tqdm(range(15)):
         tasks = [
             [
                 get_sample_for_ch(dataset)
